@@ -12289,8 +12289,10 @@ const reset = css`
 `;
 async function enableMocking() {
   const { worker } = await __vitePreload(() => import("./browser-Cm04KqPi.js"), true ? [] : void 0);
-  return worker.start({
-    onUnhandledRequest: "bypass"
+  await worker.start({
+    serviceWorker: {
+      url: "/react-shopping-cart/mockServiceWorker.js"
+    }
   });
 }
 enableMocking().then(() => {
