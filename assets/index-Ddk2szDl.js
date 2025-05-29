@@ -11513,17 +11513,18 @@ function Header({
     /* @__PURE__ */ jsx$1(HeaderTitle, { children: title })
   ] });
 }
+var define_import_meta_env_default = { BASE_URL: "/react-shopping-cart/", MODE: "production", DEV: false, PROD: true, SSR: false };
 async function baseAPI({
   method,
   path,
   body
 }) {
-  const baseURL = "http://techcourse-lv2-alb-974870821.ap-northeast-2.elb.amazonaws.com";
+  const baseURL = define_import_meta_env_default.VITE_BASE_URL;
   const result = await fetch(`${baseURL}${path}`, {
     method,
     headers: {
       Authorization: `Basic ${btoa(
-        `${"Beomtae"}:${"password"}`
+        `${define_import_meta_env_default.VITE_USER_ID}:${define_import_meta_env_default.VITE_PASSWORD}`
       )}`,
       "Content-Type": "application/json"
     },
@@ -12113,7 +12114,7 @@ function OrderConfirmPage() {
   ] });
 }
 function App() {
-  return /* @__PURE__ */ jsx$1(BrowserRouter, { children: /* @__PURE__ */ jsxs(Routes, { children: [
+  return /* @__PURE__ */ jsx$1(BrowserRouter, { basename: "/react-shopping-products", children: /* @__PURE__ */ jsxs(Routes, { children: [
     /* @__PURE__ */ jsx$1(Route, { path: "/", element: /* @__PURE__ */ jsx$1(CartPage, {}) }),
     /* @__PURE__ */ jsx$1(Route, { path: "/order-confirmation", element: /* @__PURE__ */ jsx$1(OrderConfirmPage, {}) })
   ] }) });
@@ -12288,11 +12289,9 @@ const reset = css`
   }
 `;
 async function enableMocking() {
-  const { worker } = await __vitePreload(() => import("./browser-Cm04KqPi.js"), true ? [] : void 0);
-  await worker.start({
-    serviceWorker: {
-      url: "/react-shopping-cart/mockServiceWorker.js"
-    }
+  const { worker } = await __vitePreload(() => import("./browser-Mt3qCV36.js"), true ? [] : void 0);
+  return worker.start({
+    onUnhandledRequest: "bypass"
   });
 }
 enableMocking().then(() => {
