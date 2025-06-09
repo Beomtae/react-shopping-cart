@@ -12379,8 +12379,9 @@ function isCouponUsableNow(coupon, cartItems, orderPrice) {
       return !expired && meetsAmount;
     }
     case "buyXgetY": {
+      const requiredQty = (coupon.buyQuantity ?? 0) + (coupon.getQuantity ?? 0);
       const hasEligible = cartItems.some(
-        (item) => item.quantity >= (coupon.buyQuantity ?? 0)
+        (item) => item.quantity >= requiredQty
       );
       return !expired && hasEligible;
     }
