@@ -11786,7 +11786,12 @@ const AllSelectText = newStyled.label`
 const DELIVERY_FEE = {
   FREE: 0,
   STANDARD: 3e3,
-  MINIMUM: 1e5
+  MINIMUM: 1e5,
+  EXTRA: 6e3
+};
+const COUPON_MINIMUM = {
+  FIXED: 1e5,
+  FREE_SHIPPING: 5e4
 };
 const calculateOrderPrice = (cartItems) => cartItems.reduce((acc, item) => acc + item.quantity * item.product.price, 0);
 const calculateTotalProductQuantity = (cartItems) => cartItems.reduce((acc, item) => acc + item.quantity, 0);
@@ -12221,6 +12226,9 @@ const CouponContainer = newStyled.div`
   display: flex;
   flex-direction: column;
   gap: 12px;
+
+  opacity: ${({ disabled }) => disabled ? 0.5 : 1};
+  pointer-events: ${({ disabled }) => disabled ? "none" : "auto"};
 `;
 const CouponBox = newStyled.div`
   display: flex;
@@ -12299,7 +12307,7 @@ function calculateCouponDiscount(coupon, products, isIslandAreaSelected) {
     }
     case "freeShipping": {
       if (cartTotal >= (coupon.minimumAmount ?? 0)) {
-        return isIslandAreaSelected ? 6e3 : 3e3;
+        return isIslandAreaSelected ? DELIVERY_FEE.EXTRA : DELIVERY_FEE.STANDARD;
       }
       return 0;
     }
@@ -12323,10 +12331,11 @@ function CouponProvider({ products, children }) {
     coupon,
     discount: calculateCouponDiscount(coupon, products, isIslandAreaSelected)
   }));
-  const bestTwoIds = couponDiscounts.sort((a, b2) => b2.discount - a.discount).slice(0, 2).map((d2) => d2.coupon.id);
-  const [selected, setSelected] = reactExports.useState(bestTwoIds);
+  const availableCoupons = couponDiscounts.filter((cd2) => cd2.discount > 0).sort((a, b2) => b2.discount - a.discount);
+  const bestIds = availableCoupons.slice(0, 2).map((cd2) => cd2.coupon.id);
+  const [selected, setSelected] = reactExports.useState(bestIds);
   reactExports.useEffect(() => {
-    setSelected(bestTwoIds);
+    setSelected(bestIds);
   }, [
     JSON.stringify(coupons.map((c2) => c2.id)),
     JSON.stringify(products.map((i) => [i.id, i.quantity]))
@@ -12360,8 +12369,40 @@ function useCouponContext() {
     throw new Error("CouponContext not found!");
   return ctx;
 }
+function isCouponUsableNow(coupon, cartItems, orderPrice) {
+  const now = /* @__PURE__ */ new Date();
+  const expired = now > new Date(coupon.expirationDate);
+  switch (coupon.discountType) {
+    case "fixed": {
+      const meetsAmount = orderPrice >= (coupon.minimumAmount ?? COUPON_MINIMUM.FIXED);
+      return !expired && meetsAmount;
+    }
+    case "buyXgetY": {
+      const hasEligible = cartItems.some(
+        (item) => item.quantity >= (coupon.buyQuantity ?? 0)
+      );
+      return !expired && hasEligible;
+    }
+    case "freeShipping": {
+      const meetsAmount = orderPrice >= (coupon.minimumAmount ?? COUPON_MINIMUM.FREE_SHIPPING);
+      return !expired && meetsAmount;
+    }
+    case "percentage": {
+      if (expired)
+        return false;
+      if (coupon.availableTime) {
+        return isWithinTimeRange(
+          coupon.availableTime.start,
+          coupon.availableTime.end
+        );
+      }
+      return true;
+    }
+  }
+}
 function CouponModal({ onClose }) {
   const { coupons, selected, setSelected, couponDiscounts, totalDiscount } = useCouponContext();
+  const { selectCartItems, orderPrice } = useCartSelectionContext();
   const handleToggle = (id2) => {
     setSelected(
       (prev2) => prev2.includes(id2) ? prev2.filter((v2) => v2 !== id2) : prev2.length < 2 ? [...prev2, id2] : prev2
@@ -12388,7 +12429,12 @@ function CouponModal({ onClose }) {
     coupons.length === 0 ? /* @__PURE__ */ jsx$1(DescriptionText$1, { children: "사용 가능한 쿠폰이 없습니다." }) : coupons.map((coupon) => {
       var _a;
       const discount = ((_a = couponDiscounts.find((d2) => d2.coupon.id === coupon.id)) == null ? void 0 : _a.discount) || 0;
-      return /* @__PURE__ */ jsxs(CouponContainer, { children: [
+      const disabled = !isCouponUsableNow(
+        coupon,
+        selectCartItems,
+        orderPrice
+      );
+      return /* @__PURE__ */ jsxs(CouponContainer, { disabled, children: [
         /* @__PURE__ */ jsx$1(Separator, {}),
         /* @__PURE__ */ jsxs(CouponBox, { children: [
           /* @__PURE__ */ jsx$1(
