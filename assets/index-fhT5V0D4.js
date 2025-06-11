@@ -11545,6 +11545,17 @@ function isValidImageUrl(url) {
   const invalidExtensionPattern = /\.(txt|pdf|doc|docx|xls|xlsx|ppt|pptx|zip|rar|7z|exe|dll|bat|cmd|sh|ps1|vbs|js|html|css|xml|json|md|log|ini|conf|config|env|gitignore|editorconfig|prettierrc|eslintrc|babelrc|tsconfig|package|yarn|lock|toml|yaml|yml)$/i;
   return urlPattern.test(url) && !invalidExtensionPattern.test(url);
 }
+const defaultImage = "/react-shopping-cart/assets/default_product.png";
+const FallbackImage$1 = newStyled.img`
+  width: 100%;
+  height: 100%;
+
+  border-radius: 8px;
+  object-fit: cover;
+`;
+function FallbackImage({ alt = "상품 이미지", ...props }) {
+  return /* @__PURE__ */ jsx$1(FallbackImage$1, { src: defaultImage, alt, ...props });
+}
 const Container$d = newStyled.button`
   display: flex;
   justify-content: center;
@@ -11618,6 +11629,44 @@ async function updateCartItem(id2, quantity) {
     }
   });
 }
+function createFetcher() {
+  const fetch2 = async (path) => {
+    const data = await baseAPI({
+      method: "GET",
+      path
+    });
+    return data;
+  };
+  return fetch2;
+}
+const CartContext = reactExports.createContext(null);
+function CartProvider({ children }) {
+  const [cartItems, setCartItems] = reactExports.useState([]);
+  const fetcher = createFetcher();
+  const fetch2 = reactExports.useCallback(async () => {
+    const data = await fetcher("/cart-items?page=0&size=20");
+    if (data)
+      setCartItems(data.content);
+  }, []);
+  reactExports.useEffect(() => {
+    fetch2();
+  }, [fetch2]);
+  const value = reactExports.useMemo(() => ({ cartItems, fetch: fetch2 }), [cartItems, fetch2]);
+  return /* @__PURE__ */ jsx$1(CartContext.Provider, { value, children });
+}
+function useCartContext() {
+  const ctx = reactExports.useContext(CartContext);
+  if (!ctx)
+    throw new Error("CartContext not found!");
+  return ctx;
+}
+const useCartMutations = (id2) => {
+  const { fetch: fetch2 } = useCartContext();
+  const remove = () => deleteCartItem(id2).then(fetch2);
+  const increase = (quantity) => updateCartItem(id2, quantity + 1).then(fetch2);
+  const decrease = (quantity) => updateCartItem(id2, quantity - 1).then(fetch2);
+  return { remove, increase, decrease };
+};
 const Container$c = newStyled.div`
   display: flex;
   flex-direction: column;
@@ -11695,15 +11744,8 @@ const Text$1 = newStyled.p`
   text-align: center;
   vertical-align: middle;
 `;
-const defaultImage = "/react-shopping-cart/assets/default_product.png";
-function CartItem({
-  id: id2,
-  product,
-  quantity,
-  selected,
-  toggle,
-  onUpdate
-}) {
+function CartItem({ id: id2, product, quantity, selected, toggle }) {
+  const { remove, increase, decrease } = useCartMutations(id2);
   return /* @__PURE__ */ jsxs(Container$c, { "data-testid": `CartItem-${id2}`, children: [
     /* @__PURE__ */ jsx$1(Separator, {}),
     /* @__PURE__ */ jsxs(ActionContainer, { children: [
@@ -11712,21 +11754,14 @@ function CartItem({
         DeleteButton,
         {
           onClick: async () => {
-            await deleteCartItem(id2);
-            onUpdate();
+            remove();
           },
           children: /* @__PURE__ */ jsx$1(DeleteButtonText, { children: "삭제" })
         }
       )
     ] }),
     /* @__PURE__ */ jsxs(InfoContainer$1, { children: [
-      /* @__PURE__ */ jsx$1(PreviewBox$1, { children: /* @__PURE__ */ jsx$1(
-        PreviewImage$1,
-        {
-          src: isValidImageUrl(product.imageUrl) ? product.imageUrl : defaultImage,
-          alt: "상품 이미지"
-        }
-      ) }),
+      /* @__PURE__ */ jsx$1(PreviewBox$1, { children: isValidImageUrl(product.imageUrl) ? /* @__PURE__ */ jsx$1(PreviewImage$1, { src: product.imageUrl, alt: "상품 이미지" }) : /* @__PURE__ */ jsx$1(FallbackImage, {}) }),
       /* @__PURE__ */ jsxs(InfoBox$2, { children: [
         /* @__PURE__ */ jsxs(CartProductInfo$1, { children: [
           /* @__PURE__ */ jsx$1(CartProductTitle$1, { children: product.name }),
@@ -11738,8 +11773,7 @@ function CartItem({
             {
               actionType: "delete",
               onClick: async () => {
-                await deleteCartItem(id2);
-                onUpdate();
+                remove();
               }
             }
           ) : /* @__PURE__ */ jsx$1(
@@ -11747,8 +11781,7 @@ function CartItem({
             {
               actionType: "minus",
               onClick: async () => {
-                await updateCartItem(id2, quantity - 1);
-                onUpdate();
+                decrease(quantity);
               }
             }
           ),
@@ -11758,8 +11791,7 @@ function CartItem({
             {
               actionType: "plus",
               onClick: async () => {
-                await updateCartItem(id2, quantity + 1);
-                onUpdate();
+                increase(quantity);
               }
             }
           )
@@ -11789,10 +11821,6 @@ const DELIVERY_FEE = {
   MINIMUM: 1e5,
   EXTRA: 6e3
 };
-const COUPON_MINIMUM = {
-  FIXED: 1e5,
-  FREE_SHIPPING: 5e4
-};
 const calculateOrderPrice = (cartItems) => cartItems.reduce((acc, item) => acc + item.quantity * item.product.price, 0);
 const calculateTotalProductQuantity = (cartItems) => cartItems.reduce((acc, item) => acc + item.quantity, 0);
 const calculateTotalPrice = (value) => {
@@ -11800,37 +11828,6 @@ const calculateTotalPrice = (value) => {
   const totalPrice = value + deliveryFee;
   return { deliveryFee, totalPrice };
 };
-function fetchData() {
-  const fetch2 = async (path) => {
-    const data = await baseAPI({
-      method: "GET",
-      path
-    });
-    return data;
-  };
-  return fetch2;
-}
-const CartContext = reactExports.createContext(null);
-function CartProvider({ children }) {
-  const [cartItems, setCartItems] = reactExports.useState([]);
-  const fetcher = fetchData();
-  const fetch2 = reactExports.useCallback(async () => {
-    const data = await fetcher("/cart-items?page=0&size=20");
-    if (data)
-      setCartItems(data.content);
-  }, []);
-  reactExports.useEffect(() => {
-    fetch2();
-  }, [fetch2]);
-  const value = reactExports.useMemo(() => ({ cartItems, fetch: fetch2 }), [cartItems, fetch2]);
-  return /* @__PURE__ */ jsx$1(CartContext.Provider, { value, children });
-}
-function useCartContext() {
-  const ctx = reactExports.useContext(CartContext);
-  if (!ctx)
-    throw new Error("CartContext not found!");
-  return ctx;
-}
 const CartSelectionContext = reactExports.createContext(
   null
 );
@@ -11893,7 +11890,7 @@ function useCartSelectionContext() {
 }
 function CartList() {
   const selection = useCartSelectionContext();
-  const { cartItems, fetch: fetch2 } = useCartContext();
+  const { cartItems } = useCartContext();
   return /* @__PURE__ */ jsxs(Container$b, { children: [
     /* @__PURE__ */ jsxs(AllSelectBox, { children: [
       /* @__PURE__ */ jsx$1(
@@ -11911,8 +11908,7 @@ function CartList() {
       {
         ...cartItem,
         selected: selection.selectedList[index],
-        toggle: () => selection.toggle(index),
-        onUpdate: fetch2
+        toggle: () => selection.toggle(index)
       },
       cartItem.id
     ))
@@ -12000,10 +11996,10 @@ const Description$4 = newStyled.p`
   font-size: 12px;
   font-weight: 500;
 `;
-function CartTitle({ quantity = 0 }) {
+function CartTitle({ uniqueProductCount = 0 }) {
   return /* @__PURE__ */ jsxs(Container$9, { children: [
     /* @__PURE__ */ jsx$1(Title$3, { children: "장바구니" }),
-    /* @__PURE__ */ jsx$1(Description$4, { children: quantity !== 0 && `현재 ${quantity}종류의 상품이 담겨있습니다.` })
+    /* @__PURE__ */ jsx$1(Description$4, { children: uniqueProductCount !== 0 && `현재 ${uniqueProductCount}종류의 상품이 담겨있습니다.` })
   ] });
 }
 const Container$8 = newStyled.div`
@@ -12038,7 +12034,7 @@ function CartContents() {
     ] });
   }
   return /* @__PURE__ */ jsxs(Container$8, { children: [
-    /* @__PURE__ */ jsx$1(CartTitle, { quantity: cartItems.length }),
+    /* @__PURE__ */ jsx$1(CartTitle, { uniqueProductCount: cartItems.length }),
     /* @__PURE__ */ jsx$1(CartList, {}),
     /* @__PURE__ */ jsx$1(CartPrice, { value: selection.orderPrice }),
     /* @__PURE__ */ jsx$1(FooterButton, { disabled: selection.disabled, onClick: moveToOrderConfirm, children: "주문 확인" })
@@ -12062,16 +12058,136 @@ function BackButton() {
   const goBack = () => navigate(-1);
   return /* @__PURE__ */ jsx$1(BackButton$1, { onClick: goBack, children: /* @__PURE__ */ jsx$1("img", { src: backButtonImage, alt: "뒤로가기" }) });
 }
+function isWithinTimeRange(start, end) {
+  const now = /* @__PURE__ */ new Date();
+  const [startH, startM, startS] = start.split(":").map(Number);
+  const [endH, endM, endS] = end.split(":").map(Number);
+  const nowSec = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
+  const startSec = startH * 3600 + startM * 60 + startS;
+  const endSec = endH * 3600 + endM * 60 + endS;
+  return nowSec >= startSec && nowSec < endSec;
+}
+const fixedCalculator = (coupon, products) => {
+  const cartTotal = products.reduce(
+    (sum, item) => sum + item.product.price * item.quantity,
+    0
+  );
+  const { discount, minimumAmount } = coupon;
+  return cartTotal >= minimumAmount ? discount : 0;
+};
+const percentageCalculator = (coupon, products) => {
+  const cartTotal = products.reduce(
+    (sum, item) => sum + item.product.price * item.quantity,
+    0
+  );
+  const { discount, availableTime } = coupon;
+  if (availableTime) {
+    const { start, end } = availableTime;
+    if (!isWithinTimeRange(start, end))
+      return 0;
+  }
+  return Math.floor(cartTotal * discount / 100);
+};
+const buyXgetYCalculator = (coupon, products) => {
+  const { buyQuantity, getQuantity } = coupon;
+  const requiredQuantity = buyQuantity + getQuantity;
+  const eligibleItems = products.filter(
+    (item) => item.quantity >= requiredQuantity
+  );
+  if (eligibleItems.length > 0) {
+    const maxPrice = Math.max(
+      ...eligibleItems.map((item) => item.product.price)
+    );
+    return maxPrice;
+  }
+  return 0;
+};
+const freeShippingCalculator = (coupon, products, isIslandAreaSelected) => {
+  const cartTotal = products.reduce(
+    (sum, item) => sum + item.product.price * item.quantity,
+    0
+  );
+  const { minimumAmount } = coupon;
+  if (cartTotal >= minimumAmount) {
+    return isIslandAreaSelected ? DELIVERY_FEE.EXTRA : DELIVERY_FEE.STANDARD;
+  }
+  return 0;
+};
+const couponCalculators = {
+  fixed: fixedCalculator,
+  percentage: percentageCalculator,
+  buyXgetY: buyXgetYCalculator,
+  freeShipping: freeShippingCalculator
+};
+function calculateCouponDiscount(coupon, products, isIslandAreaSelected) {
+  const calculator = couponCalculators[coupon.discountType];
+  if (!calculator)
+    return 0;
+  return calculator(coupon, products, isIslandAreaSelected);
+}
+const CouponContext = reactExports.createContext(null);
+function CouponProvider({ products, children }) {
+  const [coupons, setCoupons] = reactExports.useState([]);
+  const [isIslandAreaSelected, setIsIslandAreaSelected] = reactExports.useState(false);
+  const fetchCoupons = async () => {
+    const data = await createFetcher()("/coupons");
+    setCoupons(data ?? []);
+  };
+  reactExports.useEffect(() => {
+    fetchCoupons();
+  }, []);
+  const couponDiscounts = coupons.map((coupon) => ({
+    coupon,
+    discount: calculateCouponDiscount(coupon, products, isIslandAreaSelected)
+  }));
+  const availableCoupons = couponDiscounts.filter((cd2) => cd2.discount > 0).sort((a, b2) => b2.discount - a.discount);
+  const bestIds = availableCoupons.slice(0, 2).map((cd2) => cd2.coupon.id);
+  const [selected, setSelected] = reactExports.useState(bestIds);
+  reactExports.useEffect(() => {
+    setSelected(bestIds);
+  }, [
+    JSON.stringify(coupons.map((c2) => c2.id)),
+    JSON.stringify(products.map((i) => [i.id, i.quantity]))
+  ]);
+  const totalDiscount = couponDiscounts.filter((d2) => selected.includes(d2.coupon.id)).reduce((sum, d2) => sum + d2.discount, 0);
+  const value = reactExports.useMemo(
+    () => ({
+      coupons,
+      selected,
+      setSelected,
+      couponDiscounts,
+      totalDiscount,
+      fetchCoupons,
+      isIslandAreaSelected,
+      setIsIslandAreaSelected
+    }),
+    [
+      coupons,
+      selected,
+      setSelected,
+      couponDiscounts,
+      totalDiscount,
+      isIslandAreaSelected
+    ]
+  );
+  return /* @__PURE__ */ jsx$1(CouponContext.Provider, { value, children });
+}
+function useCouponContext() {
+  const ctx = reactExports.useContext(CouponContext);
+  if (!ctx)
+    throw new Error("CouponContext not found!");
+  return ctx;
+}
 function useOrderSummary() {
   const location = useLocation();
   const products = location.state.orderProducts;
-  const quantity = products.length;
+  const uniqueProductCount = products.length;
   const productQuantity = calculateTotalProductQuantity(products);
   const price = calculateOrderPrice(products);
   const { deliveryFee } = calculateTotalPrice(price);
   return {
     products,
-    quantity,
+    uniqueProductCount,
     productQuantity,
     price,
     deliveryFee
@@ -12134,13 +12250,7 @@ function OrderItem({ id: id2, quantity, product }) {
   return /* @__PURE__ */ jsxs(Container$7, { "data-testid": `OrderItem-${id2}`, children: [
     /* @__PURE__ */ jsx$1(Separator, {}),
     /* @__PURE__ */ jsxs(InfoContainer, { children: [
-      /* @__PURE__ */ jsx$1(PreviewBox, { children: /* @__PURE__ */ jsx$1(
-        PreviewImage,
-        {
-          src: isValidImageUrl(product.imageUrl) ? product.imageUrl : defaultImage,
-          alt: "상품 이미지"
-        }
-      ) }),
+      /* @__PURE__ */ jsx$1(PreviewBox, { children: isValidImageUrl(product.imageUrl) ? /* @__PURE__ */ jsx$1(PreviewImage, { src: product.imageUrl, alt: "상품 이미지" }) : /* @__PURE__ */ jsx$1(FallbackImage, {}) }),
       /* @__PURE__ */ jsxs(InfoBox$1, { children: [
         /* @__PURE__ */ jsxs(CartProductInfo, { children: [
           /* @__PURE__ */ jsx$1(CartProductTitle, { children: product.name }),
@@ -12267,150 +12377,52 @@ function useEscapeKey(onEscape) {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [onEscape]);
 }
-function isWithinTimeRange(start, end) {
-  const now = /* @__PURE__ */ new Date();
-  const [startH, startM, startS] = start.split(":").map(Number);
-  const [endH, endM, endS] = end.split(":").map(Number);
-  const nowSec = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
-  const startSec = startH * 3600 + startM * 60 + startS;
-  const endSec = endH * 3600 + endM * 60 + endS;
-  return nowSec >= startSec && nowSec < endSec;
-}
-function calculateCouponDiscount(coupon, products, isIslandAreaSelected) {
-  const cartTotal = products.reduce(
-    (sum, item) => sum + item.product.price * item.quantity,
-    0
-  );
-  switch (coupon.discountType) {
-    case "fixed": {
-      return cartTotal >= (coupon.minimumAmount ?? 0) ? coupon.discount : 0;
-    }
-    case "percentage": {
-      if (coupon.availableTime) {
-        const { start, end } = coupon.availableTime;
-        if (!isWithinTimeRange(start, end))
-          return 0;
-      }
-      return Math.floor(cartTotal * (coupon.discount ?? 0) / 100);
-    }
-    case "buyXgetY": {
-      const requiredQuantity = (coupon.buyQuantity ?? 0) + (coupon.getQuantity ?? 0);
-      const eligibleItems = products.filter(
-        (item) => item.quantity >= requiredQuantity
-      );
-      if (eligibleItems.length > 0) {
-        const maxPrice = Math.max(
-          ...eligibleItems.map((item) => item.product.price)
-        );
-        return maxPrice;
-      }
-      return 0;
-    }
-    case "freeShipping": {
-      if (cartTotal >= (coupon.minimumAmount ?? 0)) {
-        return isIslandAreaSelected ? DELIVERY_FEE.EXTRA : DELIVERY_FEE.STANDARD;
-      }
-      return 0;
-    }
-    default: {
-      return 0;
-    }
-  }
-}
-const CouponContext = reactExports.createContext(null);
-function CouponProvider({ products, children }) {
-  const [coupons, setCoupons] = reactExports.useState([]);
-  const [isIslandAreaSelected, setIsIslandAreaSelected] = reactExports.useState(false);
-  const fetchCoupons = async () => {
-    const data = await fetchData()("/coupons");
-    setCoupons(data ?? []);
-  };
-  reactExports.useEffect(() => {
-    fetchCoupons();
-  }, []);
-  const couponDiscounts = coupons.map((coupon) => ({
-    coupon,
-    discount: calculateCouponDiscount(coupon, products, isIslandAreaSelected)
-  }));
-  const availableCoupons = couponDiscounts.filter((cd2) => cd2.discount > 0).sort((a, b2) => b2.discount - a.discount);
-  const bestIds = availableCoupons.slice(0, 2).map((cd2) => cd2.coupon.id);
-  const [selected, setSelected] = reactExports.useState(bestIds);
-  reactExports.useEffect(() => {
-    setSelected(bestIds);
-  }, [
-    JSON.stringify(coupons.map((c2) => c2.id)),
-    JSON.stringify(products.map((i) => [i.id, i.quantity]))
-  ]);
-  const totalDiscount = couponDiscounts.filter((d2) => selected.includes(d2.coupon.id)).reduce((sum, d2) => sum + d2.discount, 0);
-  const value = reactExports.useMemo(
-    () => ({
-      coupons,
-      selected,
-      setSelected,
-      couponDiscounts,
-      totalDiscount,
-      fetchCoupons,
-      isIslandAreaSelected,
-      setIsIslandAreaSelected
-    }),
-    [
-      coupons,
-      selected,
-      setSelected,
-      couponDiscounts,
-      totalDiscount,
-      isIslandAreaSelected
-    ]
-  );
-  return /* @__PURE__ */ jsx$1(CouponContext.Provider, { value, children });
-}
-function useCouponContext() {
-  const ctx = reactExports.useContext(CouponContext);
-  if (!ctx)
-    throw new Error("CouponContext not found!");
-  return ctx;
-}
-function isCouponUsableNow(coupon, cartItems, orderPrice) {
-  const now = /* @__PURE__ */ new Date();
-  const expired = now > new Date(coupon.expirationDate);
-  switch (coupon.discountType) {
-    case "fixed": {
-      const meetsAmount = orderPrice >= (coupon.minimumAmount ?? COUPON_MINIMUM.FIXED);
-      return !expired && meetsAmount;
-    }
-    case "buyXgetY": {
-      const requiredQty = (coupon.buyQuantity ?? 0) + (coupon.getQuantity ?? 0);
-      const hasEligible = cartItems.some(
-        (item) => item.quantity >= requiredQty
-      );
-      return !expired && hasEligible;
-    }
-    case "freeShipping": {
-      const meetsAmount = orderPrice >= (coupon.minimumAmount ?? COUPON_MINIMUM.FREE_SHIPPING);
-      return !expired && meetsAmount;
-    }
-    case "percentage": {
-      if (expired)
-        return false;
-      if (coupon.availableTime) {
-        return isWithinTimeRange(
-          coupon.availableTime.start,
-          coupon.availableTime.end
-        );
-      }
+const couponUsableCalculators = {
+  fixed: (coupon, _, orderPrice) => {
+    if (coupon.discountType !== "fixed")
+      return false;
+    return orderPrice >= coupon.minimumAmount;
+  },
+  freeShipping: (coupon, _, orderPrice) => {
+    if (coupon.discountType !== "freeShipping")
+      return false;
+    return orderPrice >= coupon.minimumAmount;
+  },
+  buyXgetY: (coupon, cartItems) => {
+    if (coupon.discountType !== "buyXgetY")
+      return false;
+    const requiredQty = (coupon.buyQuantity ?? 0) + (coupon.getQuantity ?? 0);
+    return cartItems.some((item) => item.quantity >= requiredQty);
+  },
+  percentage: (coupon) => {
+    if (coupon.discountType !== "percentage")
+      return false;
+    if (!coupon.availableTime)
       return true;
-    }
+    return isWithinTimeRange(
+      coupon.availableTime.start,
+      coupon.availableTime.end
+    );
   }
+};
+function getCouponValidator(coupon, cartItems, orderPrice) {
+  const now = /* @__PURE__ */ new Date();
+  if (now > new Date(coupon.expirationDate))
+    return false;
+  const validate = couponUsableCalculators[coupon.discountType];
+  if (!validate)
+    return false;
+  return validate(coupon, cartItems, orderPrice);
 }
-function CouponModal({ onClose }) {
+function CouponModal({ onRequestClose }) {
   const { coupons, selected, setSelected, couponDiscounts, totalDiscount } = useCouponContext();
   const { selectCartItems, orderPrice } = useCartSelectionContext();
-  const handleToggle = (id2) => {
+  const toggle = (id2) => {
     setSelected(
       (prev2) => prev2.includes(id2) ? prev2.filter((v2) => v2 !== id2) : prev2.length < 2 ? [...prev2, id2] : prev2
     );
   };
-  useEscapeKey(onClose);
+  useEscapeKey(onRequestClose);
   return /* @__PURE__ */ jsx$1(Overlay, { children: /* @__PURE__ */ jsxs(Container$5, { children: [
     /* @__PURE__ */ jsxs(Header, { children: [
       /* @__PURE__ */ jsx$1(Title$2, { children: "쿠폰을 선택해 주세요" }),
@@ -12419,7 +12431,7 @@ function CouponModal({ onClose }) {
         {
           src: Close,
           alt: "닫기",
-          onClick: onClose,
+          onClick: onRequestClose,
           style: { cursor: "pointer" }
         }
       )
@@ -12431,7 +12443,7 @@ function CouponModal({ onClose }) {
     coupons.length === 0 ? /* @__PURE__ */ jsx$1(DescriptionText$1, { children: "사용 가능한 쿠폰이 없습니다." }) : coupons.map((coupon) => {
       var _a;
       const discount = ((_a = couponDiscounts.find((d2) => d2.coupon.id === coupon.id)) == null ? void 0 : _a.discount) || 0;
-      const disabled = !isCouponUsableNow(
+      const disabled = !getCouponValidator(
         coupon,
         selectCartItems,
         orderPrice
@@ -12443,7 +12455,7 @@ function CouponModal({ onClose }) {
             SelectBox,
             {
               selected: selected.includes(coupon.id),
-              onClick: () => handleToggle(coupon.id)
+              onClick: () => toggle(coupon.id)
             }
           ),
           /* @__PURE__ */ jsxs(Name, { children: [
@@ -12480,7 +12492,7 @@ function CouponModal({ onClose }) {
         ] })
       ] }, coupon.id);
     }),
-    /* @__PURE__ */ jsxs(Button, { onClick: onClose, children: [
+    /* @__PURE__ */ jsxs(Button, { onClick: onRequestClose, children: [
       "총 ",
       totalDiscount.toLocaleString(),
       "원 할인 쿠폰 사용하기"
@@ -12493,7 +12505,7 @@ function OrderList({ products }) {
   return /* @__PURE__ */ jsxs(Container$6, { children: [
     products.map((product) => /* @__PURE__ */ jsx$1(OrderItem, { ...product }, product.id)),
     /* @__PURE__ */ jsx$1(CouponButton, { onClick: toggleModal, children: "쿠폰 적용" }),
-    isOpen && /* @__PURE__ */ jsx$1(CouponModal, { onClose: toggleModal })
+    isOpen && /* @__PURE__ */ jsx$1(CouponModal, { onRequestClose: toggleModal })
   ] });
 }
 const Container$4 = newStyled.div`
@@ -12562,7 +12574,7 @@ function OrderPrice({ order }) {
   const moveToPayment = () => {
     navigate("/payment", {
       state: {
-        quantity: order.quantity,
+        quantity: order.uniqueProductCount,
         productQuantity: order.productQuantity,
         price: totalPrice
       }
@@ -12634,11 +12646,14 @@ const Description$1 = newStyled.p`
   font-weight: 500;
   line-height: 1.5;
 `;
-function OrderTitle({ quantity = 0, productQuantity = 0 }) {
+function OrderTitle({
+  uniqueProductCount = 0,
+  productQuantity = 0
+}) {
   return /* @__PURE__ */ jsxs(Container$3, { children: [
     /* @__PURE__ */ jsx$1(Title$1, { children: "주문 확인" }),
-    /* @__PURE__ */ jsx$1(Description$1, { children: quantity !== 0 && /* @__PURE__ */ jsxs(Fragment, { children: [
-      `총 ${quantity}종류의 상품 ${productQuantity}개를 주문합니다.`,
+    /* @__PURE__ */ jsx$1(Description$1, { children: uniqueProductCount !== 0 && /* @__PURE__ */ jsxs(Fragment, { children: [
+      `총 ${uniqueProductCount}종류의 상품 ${productQuantity}개를 주문합니다.`,
       /* @__PURE__ */ jsx$1("br", {}),
       "최종 결제 금액을 확인해 주세요."
     ] }) })
@@ -12659,7 +12674,7 @@ function OrderContents() {
     /* @__PURE__ */ jsx$1(
       OrderTitle,
       {
-        quantity: order.quantity,
+        uniqueProductCount: order.uniqueProductCount,
         productQuantity: order.productQuantity
       }
     ),
@@ -12719,7 +12734,7 @@ function PaymentContents() {
   const price = location.state.price;
   const productQuantity = location.state.productQuantity;
   const navigate = useNavigate();
-  const handleBackToCart = () => {
+  const goHome = () => {
     navigate("/");
   };
   return /* @__PURE__ */ jsxs(Container$1, { children: [
@@ -12742,7 +12757,7 @@ function PaymentContents() {
         ] })
       ] })
     ] }),
-    /* @__PURE__ */ jsx$1(FooterButton, { onClick: handleBackToCart, children: "장바구니로 돌아가기" })
+    /* @__PURE__ */ jsx$1(FooterButton, { onClick: goHome, children: "장바구니로 돌아가기" })
   ] });
 }
 function PaymentPage() {
